@@ -1,0 +1,171 @@
+---
+title: "Inlämningsuppgift 2 grupp 19"
+format: pdf
+editor: visual
+author: "Erik Borén"
+---
+
+## Uppgift 1
+
+**a)** En positiv riktning innebär att tåget färdas från Lyon mot Paris. en negativ riktning innebär att tåget färdas från Paris mot Lyon.
+
+**b)** En mer vertikallinje indikerar en högre hastighet. En horisontell linje indikerar att tåget står stilla.
+
+**c)**
+
+```{r}
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(hms)
+```
+
+```{r}
+train_data = read_excel('train_data.xlsx', sheet = "turer")
+station_data = read_excel('train_data.xlsx', sheet = "stationer")
+train_data <-
+  train_data %>%
+  inner_join(station_data, by = "station")
+
+train_data
+
+
+
+```
+
+**Här laddas tiderna in som datum vilket förklara varför det kommit med** det spelar dock ingen roll senare.
+
+```{r}
+
+train_data <-
+  train_data %>%
+  mutate( time2 = as.POSIXct(time, format="%H:%M:S")) 
+
+
+
+```
+
+```{r}
+majortimebreaks <- data.frame(hourbreaks =seq(from = min(train_data$time)-as.difftime(1, units = "hours"), to = max(train_data$time) + as.difftime(1, units = "hours"), by = as.difftime(1, units = "hours")))
+
+majortimebreaks <-
+  majortimebreaks%>%
+  mutate( hourlabels = strftime(hourbreaks, format="%H") )
+
+majortimebreaks
+```
+
+```{r}
+
+
+train_plott <- ggplot(train_data, aes(x=time2,
+                                      y=pos,
+                                      color = as.character(train_id)))+
+  geom_path(size = 2) + 
+  labs(title = "Tågtidtabell mellan Umeå Central och Örnsköldsviks Central", subtitle = "För ett antal utvalda turer vintern 2025", color = "Tågnummer", , caption = "https://www.norrtag.se/wp-content/uploads/2024/12/Tidtabell_Umea-Ovik-Sundsvall-Vinter-25.pdf", x = "") + 
+  scale_y_continuous(name = "", breaks = station_data$pos, labels = station_data$station, guide = guide_axis(n.dodge = 2), minor_breaks = station_data$pos) +
+  scale_x_time(breaks = majortimebreaks$hourbreaks, labels= majortimebreaks$hourlabels) +
+  theme_bw()
+
+
+
+train_plott
+```
+
+## Uppgift 2
+
+```{r}
+tempdata <- read.table("uppsala_tm_1722-2022.dat")
+colnames(tempdata) <- c("År", "Månad", "Dag", "Temp", "Temp_korr", "Station")
+dim(tempdata)
+head(tempdata)
+```
+
+a\)
+
+```{r}
+medeltemp = mean(tempdata$Temp_korr)
+medeltemp
+
+```
+
+Svar: 5,3 grader
+
+b\)
+
+```{r}
+year_mean <-
+  tempdata %>%
+  select(År, Temp_korr) %>%
+  group_by(År) %>%
+  summarize( Medeltemp = mean(Temp_korr))
+
+  year_mean
+  
+```
+
+c\)
+
+```{r}
+year_mean <-
+  year_mean %>%
+  mutate(Temp_diff = Medeltemp - medeltemp)
+
+year_mean
+```
+
+d\)
+
+```{r}
+year_mean <-
+  year_mean %>%
+  mutate( fill_color = ifelse(Temp_diff <= 0, "blue", "red"))
+
+dplot <- ggplot(year_mean, aes(x=År
+                               ))+
+  geom_col(data=subset(year_mean, Temp_diff >= 0), aes(y = Medeltemp - medeltemp, fill= fill_color))+
+  geom_col(data=subset(year_mean, Temp_diff < 0), aes(y = Medeltemp - medeltemp, fill= fill_color))+
+  geom_smooth(aes(y=Medeltemp-medeltemp), se=FALSE, color = "black", method = "loess", formula = "y ~ x"  )+
+  scale_fill_identity()+
+  scale_y_continuous(breaks = c(-8:3) + medeltemp,  labels=(2:13))+
+  scale_x_continuous(breaks = seq(from = 1700, to = 2022, by = 50), expand=c(0,0))+
+  labs(title = "Rekonstruerad årsmedeltemperatur, Uppsala 1722-2022", x = NULL, y = NULL)+
+  theme_minimal()
+  
+dplot
+```
+
+e\)
+
+```{r}
+  month_data<- tempdata %>%
+  mutate(period = case_when(År >= 1993 ~ "1993-2022",
+                            År < 1993 ~ "1722-1992")) %>%
+  group_by(Månad, period) %>%
+  summarize(medel = mean(Temp_korr))
+  
+
+month_data
+```
+
+```{r}
+month_mean <- ggplot(month_data, aes(
+  x = Månad,
+  y = medel,
+  fill = period
+))+
+  geom_col(position = "dodge2")+
+  scale_x_continuous(breaks = c(1:12), labels = c("Januari", "Februari", "Mars", "Apri", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"))+
+  
+  labs(fill = NULL, title = "Månadsmedeltemperaturer", x = NULL, y = "Medeltemperatur (\u00B0C)" )+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = -30, hjust = 0.5, vjust = 0.5))
+
+
+month_mean
+```
+
+f\)
+
+Enligt diagrammet ovan ser det ut som att det är de kallare månaderna där temperaturen ökat mest.

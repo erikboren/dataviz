@@ -1,0 +1,208 @@
+---
+title: "Inlämning 3 grupp 19"
+format: pdf
+editor: visual
+---
+
+## Uppgift 1
+
+```{r}
+load("Inl_3.rda")
+library(ggplot2)
+library(dplyr)
+library(ggiraph)
+library(extrafont)
+library(stringr)
+loadfonts(device = "win")
+
+
+```
+
+```{r}
+#| eval: false
+energy_plot <- Energy_production %>%
+  ggplot(aes(x = Quantity,
+  y = Source,
+  fill = Type)) +
+  transition_time(Year)+
+  geom_col() +
+  scale_x_continuous(breaks = c(0, 20000, 40000))+
+  xlim(0, 60000) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20),
+    text = element_text(family = "serif"), 
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 50,
+                                hjust = 0.8,
+                                vjust = 20,
+                                family = "san-serif"),
+    legend.position = "top",
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(1, "lines"),
+    panel.background = element_rect(fill = "lightyellow"),
+    plot.background = element_rect(fill = "lightyellow"),
+    plot.margin = unit(c(1,1.5,0,0.5), 'cm')
+    ) +
+  scale_fill_manual(values = c("#2a2529", "#19a8b8", "#215112"))+
+  labs(title = "World energy production (TWh) 1800-2023",
+    x = "{frame_time}",
+    y = NULL,
+    fill = NULL)
+  
+
+```
+
+```{r}
+#| eval: false
+animate(energy_plot, fps = 10, nframes = 200,
+        start_pause = 10, end_pause = 20)
+```
+
+## Uppgift 2
+
+```{r}
+library(sf, quietly = TRUE)
+World %>%
+  filter() %>%
+ggplot(aes(fill = NULL)) +
+  geom_sf() +
+  theme_bw()
+```
+
+```{r}
+Europe_Map <- World %>%
+  filter(CONTINENT == "Europe" | SOVEREIGNT == "Cyprus" )
+```
+
+Jag har valt att använda data från valet till Europaparlamentet 2024 och visa hur mandaten för varje land i EU förelats i EUs olika parlamentsgrupper. Cypern är med i EU men räknas inte som Europa i datasetet så den fick jag lägga till genom att ändra filter-funktionen i chunken ovan.
+
+Jag har laddat ned från EUs hemsida filer som innehåller mandatfördelningen från varje land och lagt i en mapp som heter valresultat2024. Varje land är en fil så här får jag jobba med att sammanfoga allt till en dataframe.
+
+Då det inte står i filen vilket land datan avser utan bara i namnet på filen och med ett konstigt format på landsförkortningar så behöver även dessa rättas till.
+
+**OBS** Hoppa över att köra efterföljande chunk då jag inte inkluderat alla .csv filer i inlämningen. Ladda datat med .RData filen istället.
+
+```{r}
+filenames <- list.files("valresultat2024", pattern="*.csv", full.names=TRUE)
+pdata <- read.delim(file = filenames[1], sep =";") %>%
+  mutate(cshort = str_sub(filenames[1],-6,-5),
+         file = filenames[1])
+  
+filenames <- filenames[- 1]
+#Tar bort det första namnet då det redan är använt för att skapa en mall df
+
+for (file_name in filenames){
+  country_results <- read.delim(file_name, sep =";") %>%
+    mutate(cshort =  str_sub(as.character(file_name),-6,-5),
+           file = file_name)
+  pdata <- rbind(pdata, country_results)
+}
+
+
+pdata <- pdata %>%
+  group_by(cshort, GROUP_ID) %>%
+  summarize(SEATS_TOTAL = sum(SEATS_TOTAL))%>%
+  mutate(country_seat_percentage = signif(SEATS_TOTAL / sum(SEATS_TOTAL),2),
+         ISO_A2_EH = case_when(cshort == "el" ~ "GR",
+                              .default = str_to_upper(cshort) ))  
+
+
+pdata <-pdata %>%
+  group_by(cshort) %>%
+  mutate(results_string = as.character(paste0(GROUP_ID ,": ", ... = country_seat_percentage*100," %, ", SEATS_TOTAL, " seat(s)"  ,"\n", collapse = "")))
+
+seats <-pdata %>%
+  group_by(cshort) %>%
+  summarize(seat_sum = sum(SEATS_TOTAL))
+
+pdata_max <- pdata %>%
+  group_by(cshort) %>%
+  filter(SEATS_TOTAL == max(SEATS_TOTAL))
+
+pdata_max
+```
+
+För att få en bra sträng att ha min tooltip så gör jag en sträng som innehåller alla gruppers %-resultat samt antal mandat
+
+Till slut så gör jag en ny df som heter pdatamax som enbart har den största gruppen.
+
+Nu är det dags att köra en join med denna data och data från World. Dock är alla länder i Europa inte medlemmar i EU.
+
+```{r}
+Europe_Map_with_election <- 
+  full_join(Europe_Map, pdata_max)
+
+```
+
+**Kör chunken nedan då jag inte tagit med alla .csvfiler**
+
+```{r}
+
+load("inlämning3grupp19.RData")
+```
+
+```{r}
+eu_val_plot <- 
+  Europe_Map_with_election %>%
+  ggplot(aes( fill = GROUP_ID,
+              data_id = ISO_A2_EH,
+              tooltip = paste(NAME, " \n", results_string)))+
+  geom_sf_interactive()+
+  xlim(-25,40)+
+  ylim(25,70) + 
+  labs(title = "EU parliament election results 20224",
+       subtitle = "Largest political group",
+       fill = "Political groups")+
+  scale_fill_manual(values = c("#196da9", "#0055a0","orange", "#242f7f", "#0097ff", "#ff0000" ))
+
+eu_val_plot
+```
+
+```{r}
+#| eval: false
+girafe(ggobj = eu_val_plot) %>%
+  girafe_options(opts_zoom(min = 0.3,
+                           max = 4),
+                 opts_hover(css = girafe_css(
+  css = "fill:NULL;stroke:orange;"
+))
+)
+```
+
+I t.ex. Sverige finns det två politiska grupper som har båda 3 mandat, EPP och SD. Då kan denna visualisering bli lite missvisande. Här hade jag gärna lagt in en randig fill, eller liknande med båda gruppernas färger, men det vet jag inte om det är möjligt. Färgerna är hämtade från EUs hemsida förrutom för NI som är gråa. Detta skulle göra det svårt att urskilja dessa från icke-EU-länder.
+
+```{r}
+eu_val_plot2 <- 
+  Europe_Map_with_election %>%
+  ggplot(aes( fill = country_seat_percentage,
+              data_id = ISO_A2_EH,
+              tooltip = paste(NAME, " \n", results_string)))+
+  geom_sf_interactive()+
+  xlim(-25,40)+
+  ylim(25,70) + 
+  labs(title = "EU Parliament election results 2024",
+       subtitle = "Percentage of votes cast on the largest political group",
+       fill = "Percentage of votes")+
+  scale_fill_viridis_c_interactive(option = "magma", label = scales::percent) +
+  theme_void()
+  
+
+eu_val_plot2
+```
+
+```{r}
+#| eval: false
+girafe(ggobj = eu_val_plot2) %>%
+  girafe_options(opts_zoom(min = 0.3,
+                           max = 4),
+                 opts_hover(css = girafe_css(
+  css = "fill:NULL;stroke:orange;"
+))
+)
+```
+
+Här kan en se att Sverige tillsammans med Belgien och Nederländerna är det land som har störst spridning av resultat. Eller i alla fall där det största alternativet är relativt minst.
+
+Standard-CSS för ggplot är att färga området som hovras orange. Detta ställer till det när man har en färgskala. Så även detta fick jag åtgärda.

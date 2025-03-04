@@ -1,0 +1,38 @@
+---
+title: "Fråga 3"
+author: "Noa Goland"
+format: html
+editor: visual
+---
+
+## Fråga 3
+
+```{r}
+library(ggplot2)
+
+df <- read.csv("pop_lng.csv")
+
+df$Alder <- factor(df$Alder, levels = unique(df$Alder))
+df$Kon <- factor(df$Kon, levels = c(1, 2), labels = c("män", "kvinnor"))
+df$Tid <- as.factor(df$Tid)
+
+df$TAB5890 <- df$TAB5890 / 1000
+
+df <- df %>%
+  mutate(TAB5890 = ifelse(Kon == "män", -TAB5890, TAB5890))
+
+ggplot(data = df, aes(x = Alder, y = TAB5890, fill = Tid)) +
+  geom_bar(data = df %>% filter(Kon == "kvinnor") %>% arrange(rev(Tid)),
+           stat = "identity",
+           position = "identity") +
+  geom_bar(data = df %>% filter(Kon == "män") %>% arrange(rev(Tid)),
+           stat = "identity",
+           position = "identity",
+           mapping = aes(y = TAB5890)) +
+  coord_flip() +
+  scale_y_continuous(labels = abs)+
+  labs(title = "Befolkningspyramid i Sverige (1860-2023)",
+       x = "\nÅldersgrupp",
+       y = "Folkmängd (tusental)\n",
+       fill = "År")
+```
